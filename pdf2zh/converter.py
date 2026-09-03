@@ -24,8 +24,8 @@ from pdf2zh.rules import (
     min_line_height_for_language,
 )
 from pdf2zh.translator import (
-    ENGINES,
     BaseTranslator,
+    build_translator,
     encode_formula_placeholders,
     restore_formula_placeholders,
 )
@@ -385,24 +385,8 @@ class TranslateConverter(PDFConverterEx):
         self.scanned_pages: set = set()
         # Segments whose retries ran out; reported as a partial translation.
         self.translation_failures: list[str] = []
-        # e.g. "handoff:model" -> ["handoff", "model"]; model is unused by both engines
-        param = service.split(":", 1)
-        service_name = param[0]
-        service_model = param[1] if len(param) > 1 else None
-        if not envs:
-            envs = {}
-        if service_name not in ENGINES:
-            supported = ", ".join(sorted(ENGINES))
-            raise ValueError(
-                f"Unsupported translation service {service_name!r}; supported: {supported}"
-            )
-        self.translator = ENGINES[service_name](
-            lang_in,
-            lang_out,
-            service_model,
-            envs=envs,
-            prompt=prompt,
-            ignore_cache=ignore_cache,
+        self.translator = build_translator(
+            service, lang_in, lang_out, envs=envs, prompt=prompt, ignore_cache=ignore_cache
         )
 
     def record_translation_failure(self, segment: str, reason: str) -> None:

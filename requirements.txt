@@ -23,3 +23,10 @@ onnx==1.17.0
 onnxruntime==1.20.1
 opencv-python==5.0.0.93
 peewee==3.17.9
+
+# OCR for image-only pages (pdf2zh/ocr.py). pytesseract only wraps the
+# 'tesseract' binary; it does not install the OCR engine itself, which is
+# native and must be installed separately (see README.md). Pillow is a
+# direct import here too, not just a transitive dependency of pikepdf.
+pillow==12.1.1
+pytesseract==0.3.13

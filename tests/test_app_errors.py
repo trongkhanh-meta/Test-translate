@@ -60,6 +60,28 @@ class DescribeFailureTests(unittest.TestCase):
         failure = describe_failure(raised(TimeoutError("Max retries exceeded")))
         self.assertEqual(failure.code, "E-NET-04")
 
+    def test_a_missing_tesseract_engine_is_recognised(self):
+        failure = describe_failure(
+            raised(
+                RuntimeError(
+                    "Tesseract OCR engine not found on PATH. Install it separately "
+                    "from pytesseract and make sure the 'tesseract' command is "
+                    "reachable (see README.md for platform-specific instructions)."
+                )
+            )
+        )
+        self.assertEqual(failure.code, "E-OCR-07")
+        self.assertIn("Tesseract", failure.advice)
+
+    def test_an_image_only_pdf_without_ocr_is_still_recognised(self):
+        # A page with no extractable text and OCR mode off; the "OCR" marker
+        # was dropped from this rule so it cannot shadow E-OCR-07 above.
+        failure = describe_failure(
+            raised(RuntimeError("Page 3 has no extractable text (image-only)."))
+        )
+        self.assertEqual(failure.code, "E-PDF-03")
+        self.assertIn("OCR", failure.advice)
+
     def test_an_unmapped_failure_keeps_its_original_text(self):
         failure = describe_failure(raised(RuntimeError("something nobody mapped")))
         self.assertEqual(failure.code, UNKNOWN_CODE)

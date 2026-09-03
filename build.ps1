@@ -3,8 +3,10 @@
     Build the Windows desktop app into dist\PDFTranslate and zip it for release.
 
 .PARAMETER SkipAssets
-    Skip downloading the layout model and font. The build still works, but the
-    packaged app downloads them on its first translation instead of running offline.
+    Skip downloading the layout model, font, and Tesseract OCR engine. The
+    build still works, but the packaged app downloads the model/font on its
+    first translation instead of running offline, and OCR mode is unavailable
+    until Tesseract is installed separately.
 #>
 [CmdletBinding()]
 param(
@@ -40,6 +42,29 @@ if (-not $SkipAssets) {
     if ($LASTEXITCODE -ne 0) { throw "fetch_assets.py failed with exit code $LASTEXITCODE" }
 }
 
+# --- Tesseract OCR (pdf2zh/ocr.py) ------------------------------------------
+# Not installable via pip: it is a native OCR engine, not a Python package.
+# Installed once via Chocolatey (preinstalled on GitHub-hosted Windows
+# runners) so app.spec can bundle it and OCR mode works with no separate
+# install on the end user's machine. The Chocolatey package ships English
+# only, so Vietnamese is fetched separately into the same tessdata folder.
+$tesseractDir = Join-Path ${env:ProgramFiles} "Tesseract-OCR"
+$tesseractExe = Join-Path $tesseractDir "tesseract.exe"
+if (-not $SkipAssets) {
+    if (-not (Test-Path $tesseractExe)) {
+        Write-Host "==> Installing Tesseract OCR (choco)" -ForegroundColor Cyan
+        choco install tesseract -y
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "choco install tesseract failed (exit $LASTEXITCODE); OCR mode will not be bundled." -ForegroundColor Yellow
+        }
+    }
+    $vieData = Join-Path $tesseractDir "tessdata\vie.traineddata"
+    if ((Test-Path $tesseractExe) -and -not (Test-Path $vieData)) {
+        Write-Host "==> Fetching Vietnamese Tesseract language data" -ForegroundColor Cyan
+        Invoke-WebRequest -Uri "https://github.com/tesseract-ocr/tessdata_fast/raw/main/vie.traineddata" -OutFile $vieData
+    }
+}
+
 Write-Host "==> Running PyInstaller" -ForegroundColor Cyan
 & $python -m PyInstaller --noconfirm --clean (Join-Path $root "app.spec")
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
@@ -65,6 +90,10 @@ $required = @(
 if (-not $SkipAssets -or (Test-Path (Join-Path $root "app\assets\doclayout.onnx"))) {
     $required += "_internal\app\assets\doclayout.onnx"
     $required += "_internal\app\assets\GoNotoKurrent-Regular.ttf"
+}
+if (Test-Path $tesseractExe) {
+    $required += "_internal\tesseract\tesseract.exe"
+    $required += "_internal\tesseract\tessdata\eng.traineddata"
 }
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $output $_)) }
 if ($missing) {

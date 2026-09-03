@@ -126,6 +126,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--ignore-cache", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
+    parser.add_argument(
+        "--ocr",
+        action="store_true",
+        help=(
+            "Recognize text in image-only pages (raw scans with no text layer) via "
+            "Tesseract OCR, translate it, and draw the translation back at the same "
+            "position. Requires the Tesseract OCR engine installed separately and on "
+            "PATH; pages that already have a text layer are unaffected either way."
+        ),
+    )
     return parser
 
 
@@ -281,6 +291,7 @@ def _run_engine(
     ignore_cache: bool,
     engine: str,
     envs: dict[str, str],
+    ocr: bool = False,
     on_progress: Callable[[int, int], None] | None = None,
 ) -> int:
     """Run the core and return how many segments were left untranslated."""
@@ -307,6 +318,7 @@ def _run_engine(
         envs=envs,
         callback=callback,
         ignore_cache=ignore_cache,
+        ocr=ocr,
     )
     if len(result) != 1:
         raise TranslationError("PDF core did not report one translated result")
@@ -324,6 +336,7 @@ def translate_pdf(
     ignore_cache: bool = False,
     overwrite: bool = False,
     engine: str = "google",
+    ocr: bool = False,
     segments: Path | None = None,
     emit_segments: Path | None = None,
     on_progress: Callable[[int, int], None] | None = None,
@@ -358,6 +371,7 @@ def translate_pdf(
                 ignore_cache,
                 engine,
                 envs,
+                ocr,
                 on_progress,
             )
         except TranslationError:
@@ -412,6 +426,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             ignore_cache=args.ignore_cache,
             overwrite=args.overwrite,
             engine=args.engine,
+            ocr=args.ocr,
             segments=args.segments,
             emit_segments=args.emit_segments,
         )

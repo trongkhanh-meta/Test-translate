@@ -104,6 +104,8 @@ Chọn ngôn ngữ đích trong mục **Dịch sang**. Ứng dụng mặc địn
 
 Nếu tài liệu thuộc lĩnh vực y khoa hoặc phục hồi chức năng, bật ô **Ngữ cảnh y khoa (thuật ngữ y khoa/phục hồi chức năng)**. Ứng dụng sẽ giữ nguyên bản dịch tiếng Việt chuẩn cho các thuật ngữ nằm trong từ điển ([`pdf2zh/medical_glossary.py`](pdf2zh/medical_glossary.py)) thay vì để Google tự chọn nghĩa; phần văn xuôi còn lại vẫn được dịch qua Google như bình thường. Từ điển hiện tập trung vào phục hồi chức năng, chỉnh hình/cột sống, tim mạch và hô hấp — bạn có thể mở file đó và thêm/sửa thuật ngữ trực tiếp.
 
+Nếu file PDF là **ảnh scan** (không bôi đen/copy chữ được), bật thêm ô **Nhận diện chữ trong ảnh (OCR) cho trang PDF chỉ có ảnh scan**. Ứng dụng sẽ dùng Tesseract OCR để đọc chữ trong ảnh, dịch, rồi vẽ đè bản dịch tiếng Việt đúng vị trí chữ gốc — xem mục [OCR cho PDF ảnh scan](#ocr-cho-pdf-ảnh-scan) bên dưới.
+
 ### 3. Bắt đầu dịch
 
 Bấm **Dịch**. Các file được xử lý lần lượt và hiển thị trạng thái ngay trong hàng đợi.
@@ -242,7 +244,7 @@ python -m venv .venv
 .\build.ps1
 ```
 
-Gói phát hành được tạo tại `dist\PDFTranslate-windows.zip`.
+Gói phát hành được tạo tại `dist\PDFTranslate-windows.zip`. Script tự cài Tesseract OCR (qua Chocolatey, nếu có sẵn) và gói kèm luôn vào bản build để tính năng OCR hoạt động ngay khi tải về, không cần người dùng cuối cài thêm gì. Trên máy build cá nhân không có quyền cài phần mềm/không có Chocolatey, bước này tự bỏ qua và bản build vẫn hoàn tất bình thường — chỉ riêng ô OCR sẽ báo thiếu Tesseract nếu người dùng bật lên.
 
 ### Build ứng dụng macOS
 
@@ -254,9 +256,30 @@ bash build-macos.sh
 
 Gói phát hành được tạo tại `dist/PDFTranslate-macos-apple-silicon.dmg` hoặc `dist/PDFTranslate-macos-intel.dmg`. Từ máy Windows, bạn có thể chạy thủ công workflow **Release** trên GitHub Actions để lấy cả hai DMG trong phần Artifacts; khi push tag `v*`, workflow tự đính kèm chúng vào GitHub Release.
 
+## OCR cho PDF ảnh scan
+
+Với PDF chỉ chứa ảnh chụp/scan trang giấy (không copy được chữ), bật ô **Nhận diện chữ trong ảnh (OCR)** trong app, hoặc cờ `--ocr` khi chạy dòng lệnh. Ứng dụng sẽ:
+
+1. Dò tìm những trang không có lớp chữ thật nhưng có ảnh.
+2. Dùng [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) đọc chữ và toạ độ từng dòng trên ảnh.
+3. Dịch từng dòng qua đúng bộ máy dịch đang chọn (Google hoặc Google Medical — từ điển y khoa vẫn áp dụng bình thường).
+4. Che chữ gốc bằng hình chữ nhật trắng và vẽ bản dịch tiếng Việt vào đúng vị trí đó.
+
+**Bản build tải từ GitHub Actions của repo này đã có sẵn Tesseract, không cần cài thêm gì** — `build.ps1` tự cài Tesseract (qua Chocolatey) và gói tiếng Việt trước khi đóng gói `.exe`, xem mục [Build ứng dụng Windows](#build-ứng-dụng-windows).
+
+Nếu bạn tự chạy từ mã nguồn (`python app/gui.py` hoặc `scripts/translate_pdf.py`) mà không qua `build.ps1`, cần tự cài Tesseract:
+
+| Hệ điều hành | Cách cài |
+| --- | --- |
+| Windows | Tải và cài từ [UB-Mannheim/tesseract releases](https://github.com/UB-Mannheim/tesseract/wiki), hoặc `choco install tesseract` |
+| macOS | `brew install tesseract tesseract-lang` |
+| Linux | `apt install tesseract-ocr tesseract-ocr-vie` (hoặc gói tương đương của distro) |
+
+**Giới hạn:** đây là ước lượng vị trí dựa trên khung chữ Tesseract nhận diện được trên ảnh, không phải dàn lại bố cục thật như PDF có lớp chữ (xem [Giới hạn hiện tại](#giới-hạn-hiện-tại)). Chất lượng nhận diện phụ thuộc độ rõ nét của bản scan.
+
 ## Giới hạn hiện tại
 
-- **Chưa có OCR:** PDF scan chỉ chứa hình ảnh cần được OCR trước khi dịch.
+- **OCR chỉ ước lượng vị trí, không dàn lại bố cục thật:** với PDF ảnh scan, vị trí/kích thước chữ dịch dựa theo khung chữ mà Tesseract nhận diện được trên ảnh, không chính xác tuyệt đối như PDF có lớp chữ thật. Bản dịch tiếng Việt dài hơn bản gốc có thể bị thu nhỏ cỡ chữ hoặc tràn nhẹ ra ngoài khung gốc. Xem [OCR cho PDF ảnh scan](#ocr-cho-pdf-ảnh-scan).
 - Chữ nằm trong vùng được nhận diện là bảng hoặc hình đôi khi được giữ nguyên theo bản gốc.
 - Mục lục, index, danh mục ký hiệu và tài liệu tham khảo được ưu tiên giữ bố cục nên không được dàn lại dòng. Xem [quy tắc bảo toàn](references/preservation-rules.md).
 - Mỗi đoạn gửi tới Google được giới hạn ở 5.000 ký tự; phần vượt quá giới hạn không được dịch.

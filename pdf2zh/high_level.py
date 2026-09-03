@@ -25,6 +25,7 @@ from pymupdf import Document, Font
 
 from pdf2zh.converter import TranslateConverter
 from pdf2zh.doclayout import OnnxModel
+from pdf2zh.ocr import apply_ocr_translation, detect_ocr_pages
 from pdf2zh.pdfinterp import PDFPageInterpreterEx
 from pdf2zh.rules import (
     classify_preserved_page,
@@ -34,6 +35,7 @@ from pdf2zh.rules import (
     matching_table_cells,
     should_translate_table_cell,
 )
+from pdf2zh.translator import build_translator
 
 NOTO_NAME = "noto"
 STYLE_FONT_NAMES = {
@@ -503,6 +505,7 @@ def translate_stream(
     skip_subset_fonts: bool = False,
     create_dual: bool = True,
     ignore_cache: bool = False,
+    ocr: bool = False,
     **kwarg: Any,
 ):
     source_size = len(stream)
@@ -530,6 +533,11 @@ def translate_stream(
     if not create_dual:
         doc_en.close()
     page_count = doc_zh.page_count
+    # Pages with no extractable text at all (a raw scan, not a PDF with a
+    # hidden OCR text layer under the image) never reach the normal
+    # text-object translation path below, so they are identified up front
+    # and handled separately by pdf2zh.ocr once doc_zh is fully assembled.
+    ocr_pages = detect_ocr_pages(doc_zh, pages) if ocr else set()
     # font_list = [("GoNotoKurrent-Regular.ttf", font_path), ("tiro", None)]
     font_id = {}
     for page in doc_zh:
@@ -571,6 +579,14 @@ def translate_stream(
         # print(ops_old)
         # print(ops_new.encode())
         doc_zh.update_stream(obj_id, ops_new.encode())
+
+    if ocr_pages:
+        ocr_translator = build_translator(
+            service, lang_in, lang_out, envs=envs, prompt=prompt, ignore_cache=ignore_cache
+        )
+        translation_failures = list(translation_failures) + apply_ocr_translation(
+            doc_zh, ocr_pages, ocr_translator, font_path
+        )
 
     if create_dual:
         doc_en.insert_file(doc_zh)
@@ -665,6 +681,7 @@ def translate(
     prompt: Template = None,
     skip_subset_fonts: bool = False,
     ignore_cache: bool = False,
+    ocr: bool = False,
     **kwarg: Any,
 ):
     if not files:

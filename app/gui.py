@@ -108,6 +108,35 @@ def ensure_writable_streams() -> None:
             setattr(sys, name, open(os.devnull, "w", encoding="utf-8"))
 
 
+def locate_tesseract() -> None:
+    """Point pytesseract at Tesseract, bundled copy first.
+
+    app.spec bundles the whole Tesseract-OCR install next to the exe when
+    build.ps1 found one at build time (see there for how it gets installed);
+    that copy needs no PATH and no install step on the end user's machine,
+    so it is checked before anything else. If this build was not packaged
+    with one, this falls back to the two locations the official Windows
+    installer uses by default, since it does not always add itself to PATH
+    depending on the options picked at setup. If none of these exist either,
+    pytesseract's own default ("tesseract" on PATH) is left in place, and it
+    will report "not found" itself if that is not reachable.
+    """
+    candidates = [
+        APP_ROOT / "tesseract" / "tesseract.exe",  # bundled build (app.spec)
+        Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR" / "tesseract.exe",
+        Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Tesseract-OCR" / "tesseract.exe",
+    ]
+    found = next((candidate for candidate in candidates if candidate.is_file()), None)
+    if found is None:
+        return
+    try:
+        import pytesseract
+
+        pytesseract.pytesseract.tesseract_cmd = str(found)
+    except ImportError:
+        pass
+
+
 def use_bundled_assets() -> None:
     """Point the engine at the packaged model and font so no download is needed."""
     model = ASSET_DIRECTORY / "doclayout.onnx"
@@ -116,6 +145,7 @@ def use_bundled_assets() -> None:
         os.environ.setdefault("PDF_TRANSLATE_MODEL", str(model))
     if font.is_file():
         os.environ.setdefault("NOTO_FONT_PATH", str(font))
+    locate_tesseract()
 
 
 def load_bundled_fonts() -> bool:
@@ -451,6 +481,16 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.medical_mode.grid(row=2, column=0, columnspan=2, padx=GAP, pady=(0, GAP), sticky="w")
 
+        # Pages with no extractable text at all (a raw scan) are skipped by
+        # the core unless this is on; see pdf2zh/ocr.py. Needs the Tesseract
+        # OCR engine installed separately -- see README.md.
+        self.ocr_mode = ctk.CTkCheckBox(
+            controls, text="Nhận diện chữ trong ảnh (OCR) cho trang PDF chỉ có ảnh scan",
+            checkbox_width=18, checkbox_height=18,
+            font=ctk.CTkFont(self.ui_font, size=12),
+        )
+        self.ocr_mode.grid(row=3, column=0, columnspan=2, padx=GAP, pady=(0, GAP), sticky="w")
+
     def _build_queue(self) -> None:
         # A separate header, because CTkScrollableFrame's label_text cannot hold
         # a button and the queue needs a "clear" action next to its count.
@@ -742,6 +782,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         language = names[self.language.get()]
         overwrite = bool(self.overwrite.get())
         engine = "google-medical" if bool(self.medical_mode.get()) else "google"
+        ocr = bool(self.ocr_mode.get())
 
         self.translate_button.configure(state="disabled", text="Đang dịch…")
         self.clear_button.configure(state="disabled")
@@ -757,11 +798,13 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         )
         self.batch_done, self.batch_total = 0, len(pending)
         self.worker = threading.Thread(
-            target=self._run, args=(pending, language, overwrite, engine), daemon=True
+            target=self._run, args=(pending, language, overwrite, engine, ocr), daemon=True
         )
         self.worker.start()
 
-    def _run(self, files: list[Path], language: str, overwrite: bool, engine: str) -> None:
+    def _run(
+        self, files: list[Path], language: str, overwrite: bool, engine: str, ocr: bool
+    ) -> None:
         for index, path in enumerate(files, 1):
             self.events.put(("status", path, "running", "", None))
             destination = path.parent / "translated"
@@ -776,6 +819,7 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
                     target_language=language,
                     overwrite=overwrite,
                     engine=engine,
+                    ocr=ocr,
                     on_progress=report,
                 )
                 detail = (

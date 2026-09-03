@@ -311,3 +311,35 @@ ENGINES: dict[str, type[BaseTranslator]] = {
     engine.name: engine
     for engine in (GoogleTranslator, GoogleMedicalTranslator, HandoffTranslator)
 }
+
+
+def build_translator(
+    service: str,
+    lang_in: str,
+    lang_out: str,
+    envs: dict | None = None,
+    prompt: Any = None,
+    ignore_cache: bool = False,
+) -> BaseTranslator:
+    """Construct the translator named by ``service`` (e.g. "google", "handoff:model").
+
+    Shared by TranslateConverter and the OCR pipeline (pdf2zh/ocr.py) so both
+    ever select and configure the exact same engine for a given ``service``
+    string, cache namespace included.
+    """
+    param = service.split(":", 1)
+    service_name = param[0]
+    service_model = param[1] if len(param) > 1 else None
+    if service_name not in ENGINES:
+        supported = ", ".join(sorted(ENGINES))
+        raise ValueError(
+            f"Unsupported translation service {service_name!r}; supported: {supported}"
+        )
+    return ENGINES[service_name](
+        lang_in,
+        lang_out,
+        service_model,
+        envs=envs or {},
+        prompt=prompt,
+        ignore_cache=ignore_cache,
+    )

@@ -38,7 +38,7 @@ class TranslatePdfTests(unittest.TestCase):
         self.assertEqual(result.untranslated, 0)
         self.assertEqual(result.path.read_bytes(), b"%PDF-1.7\ntranslated")
         run.assert_called_once_with(
-            self.source, mock.ANY, "vi", "auto", None, translate_pdf.DEFAULT_THREADS, False, "google", {}, None
+            self.source, mock.ANY, "vi", "auto", None, translate_pdf.DEFAULT_THREADS, False, "google", {}, False, None
         )
 
     @mock.patch.object(translate_pdf, "_require_core")
@@ -113,7 +113,35 @@ class TranslatePdfTests(unittest.TestCase):
             envs={"segments_in": "table.jsonl"},
             callback=None,
             ignore_cache=True,
+            ocr=False,
         )
+
+    def test_ocr_flag_reaches_the_core_translate_call(self):
+        fake_model = object()
+        with (
+            mock.patch(
+                "pdf2zh.doclayout.OnnxModel.load_available",
+                return_value=fake_model,
+            ),
+            mock.patch(
+                "pdf2zh.high_level.translate",
+                return_value=[("translated.pdf", "")],
+            ) as core_translate,
+        ):
+            translate_pdf._run_engine(
+                self.source,
+                self.output,
+                "vi",
+                "en",
+                None,
+                1,
+                False,
+                "google",
+                {},
+                True,  # ocr
+            )
+
+        self.assertTrue(core_translate.call_args.kwargs["ocr"])
 
     def test_reports_segments_the_engine_could_not_translate(self):
         def partial(source, temp_output, *_args):

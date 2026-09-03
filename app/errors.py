@@ -70,10 +70,19 @@ _RULES: tuple[tuple[str, tuple[str, ...], str, str], ...] = (
     ),
     (
         "E-PDF-03",
-        ("scanned", "image-only", "OCR", "no extractable text"),
+        ("scanned", "image-only", "no extractable text"),
         "PDF chỉ chứa ảnh scan",
-        "Ứng dụng không có OCR nên không đọc được chữ trong ảnh. Cần bản PDF "
-        "có chữ thật (text-based).",
+        'Tick ô "Nhận diện chữ trong ảnh (OCR)" rồi dịch lại để đọc chữ trong ảnh. '
+        "Nếu đã tick mà vẫn báo lỗi này, ảnh scan có thể quá mờ để Tesseract nhận "
+        "diện được.",
+    ),
+    (
+        "E-OCR-07",
+        ("tesseract", "pytesseract", "TesseractNotFoundError"),
+        "Chưa cài được công cụ nhận diện chữ (Tesseract)",
+        "Cài Tesseract OCR riêng cho hệ điều hành của bạn rồi thử lại (xem README.md "
+        "mục OCR để lấy đường link cài đặt đúng nền tảng). pytesseract chỉ là lớp "
+        "gọi tới Tesseract, không tự cài được engine OCR.",
     ),
     (
         "E-NET-04",

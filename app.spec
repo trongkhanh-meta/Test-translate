@@ -7,6 +7,7 @@ on every launch, which is slow and trips antivirus heuristics.
 """
 
 from pathlib import Path
+import os
 
 from PyInstaller.utils.hooks import collect_data_files
 
@@ -26,6 +27,17 @@ for optional in ("app/fonts", "app/assets"):
 datas += collect_data_files("customtkinter")
 datas += collect_data_files("tkinterdnd2")
 datas += collect_data_files("babeldoc")
+
+tree_datas = []
+# Tesseract OCR (pdf2zh/ocr.py): bundle the native binary, its DLLs, and its
+# tessdata language files so OCR mode works with no separate install on the
+# end user's machine. build.ps1 installs it to this well-known location via
+# Chocolatey before PyInstaller runs; a local dev build without it simply
+# ships without OCR bundled; app/gui.py's locate_tesseract() then falls back
+# to a system install if the user has one.
+tesseract_dir = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Tesseract-OCR"
+if tesseract_dir.is_dir():
+    tree_datas.append(Tree(str(tesseract_dir), prefix="tesseract"))
 
 hiddenimports = [
     "peewee",
@@ -92,6 +104,7 @@ collect = COLLECT(
     exe,
     analysis.binaries,
     analysis.datas,
+    *tree_datas,
     strip=False,
     upx=False,
     upx_exclude=[],

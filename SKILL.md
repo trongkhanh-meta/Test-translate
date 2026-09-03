@@ -39,7 +39,7 @@ Default to Google. Offer Google Medical (`--engine google-medical`) for medical 
 - Google and Google Medical mode both send extracted document text to Google. Tell the user before processing sensitive material (this includes identifiable patient information in clinical documents) and obtain explicit confirmation unless their request already authorizes that disclosure. Handoff mode does not contact Google.
 - The medical glossary (`pdf2zh/medical_glossary.py`) is a fixed-translation term list, not a context-aware translator. It only overrides Google's word choice for the exact English terms and abbreviations it contains; everything else in the document is still translated by Google as usual. It can be edited directly to add, remove, or correct terms.
 - Supported targets are the Latin-script codes enforced by `scripts/translate_pdf.py`. CJK, right-to-left, Thai, Devanagari, and other complex-shaping targets are rejected because the bundled font and layout engine cannot render them reliably.
-- There is no OCR. If a source page is image-only, report that OCR is required instead of claiming it was translated.
+- There is now OCR (`--ocr`) for image-only pages, but it is a positional approximation, not a text-layer-accurate translation: font size and line position are Tesseract's estimate of where a line sat on the rasterized page, not a real relayout. It also needs the Tesseract OCR engine installed and on PATH separately from this skill's own `.venv` (pip only installs the `pytesseract` wrapper around it, not the engine itself); if it is missing, translate_pdf.py raises a clear error rather than silently skipping those pages. See "OCR mode" below.
 - Text inside detected tables, figures, contents pages, indexes, symbol lists, or references may intentionally remain in the source language. Report material untranslated regions as partial translation.
 - Preserve the source. Write results to a separate output directory. Do not pass `--overwrite` without explicit replacement authorization.
 
@@ -100,6 +100,16 @@ macOS/Linux:
 ```bash
 "<skill-root>/.venv/bin/python" "<skill-root>/scripts/translate_pdf.py" "<input.pdf>" --engine google-medical --output-dir "<output-dir>"
 ```
+
+## OCR mode
+
+Add `--ocr` to any of the modes above (Google or Google Medical; not meaningful with handoff, since handoff never sees the image-only pages in the first place) to translate text found on image-only pages. It requires the Tesseract OCR engine installed separately and on PATH — check with `tesseract --version` before relying on it; if that fails, tell the user to install Tesseract (README.md has platform-specific links) rather than retrying.
+
+```bash
+"<skill-root>/.venv/bin/python" "<skill-root>/scripts/translate_pdf.py" "<input.pdf>" --engine google --ocr --output-dir "<output-dir>"
+```
+
+Pages that already have a text layer are unaffected either way; `--ocr` only changes behavior on pages pdfminer finds no text on at all.
 
 ## Handoff mode
 
