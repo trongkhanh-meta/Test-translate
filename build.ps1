@@ -3,10 +3,13 @@
     Build the Windows desktop app into dist\PDFTranslate and zip it for release.
 
 .PARAMETER SkipAssets
-    Skip downloading the layout model, font, and Tesseract OCR engine. The
-    build still works, but the packaged app downloads the model/font on its
-    first translation instead of running offline, and OCR mode is unavailable
-    until Tesseract is installed separately.
+    Skip downloading the layout model, font, and Tesseract OCR engine. Use
+    this on a machine without Chocolatey/admin rights, or to build faster
+    when testing something unrelated to those assets: the app still builds
+    and runs, it just downloads the model/font on first use instead of
+    running offline, and OCR mode is unavailable until Tesseract is
+    installed separately. Without this flag, a failure to install any of
+    them stops the build rather than shipping an incomplete one silently.
 #>
 [CmdletBinding()]
 param(
@@ -36,6 +39,16 @@ Write-Host "==> Installing app and packaging dependencies" -ForegroundColor Cyan
 & $python -m pip install -r (Join-Path $root "requirements-app.txt")
 if ($LASTEXITCODE -ne 0) { throw "pip install failed with exit code $LASTEXITCODE" }
 
+# requirements.txt lists pytesseract, but "pip install" can exit 0 while still
+# leaving an individual package unresolved (a resolver skip, a transient
+# index error for that one package). That would silently ship a build where
+# OCR mode is unusable, with nothing in the log to say so -- so this is
+# checked explicitly and turned into a hard failure instead.
+& $python -c "import pytesseract" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    throw "pytesseract did not install correctly (pip install exited 0, but 'import pytesseract' failed). OCR mode needs this; check the pip install output above for a skipped or failed package."
+}
+
 if (-not $SkipAssets) {
     Write-Host "==> Fetching the layout model and font to bundle" -ForegroundColor Cyan
     & $python (Join-Path $root "scripts\fetch_assets.py")
@@ -54,8 +67,8 @@ if (-not $SkipAssets) {
     if (-not (Test-Path $tesseractExe)) {
         Write-Host "==> Installing Tesseract OCR (choco)" -ForegroundColor Cyan
         choco install tesseract -y
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "choco install tesseract failed (exit $LASTEXITCODE); OCR mode will not be bundled." -ForegroundColor Yellow
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $tesseractExe)) {
+            throw "choco install tesseract did not produce $tesseractExe (choco exit code $LASTEXITCODE). Run with -SkipAssets to build without OCR bundled instead of failing here."
         }
     }
     $vieData = Join-Path $tesseractDir "tessdata\vie.traineddata"
@@ -85,7 +98,11 @@ $required = @(
     "_internal\tkinterdnd2",
     "_internal\cv2",
     "_internal\onnxruntime",
-    "_internal\pymupdf"
+    "_internal\pymupdf",
+    # OCR mode (pdf2zh/ocr.py) needs the pytesseract wrapper bundled to even
+    # attempt recognizing text; this is separate from the tesseract.exe check
+    # below, which is the native engine pytesseract calls out to.
+    "_internal\pytesseract"
 )
 if (-not $SkipAssets -or (Test-Path (Join-Path $root "app\assets\doclayout.onnx"))) {
     $required += "_internal\app\assets\doclayout.onnx"

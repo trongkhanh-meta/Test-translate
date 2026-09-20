@@ -45,6 +45,11 @@ hiddenimports = [
     "pdf2zh.high_level",
     "pdf2zh.converter",
     "pdf2zh.translator",
+    # pdf2zh/ocr.py imports this lazily, inside a function, guarded by
+    # try/except -- PyInstaller's static analysis is not always reliable at
+    # following that pattern, so it is named explicitly rather than trusted
+    # to be found on its own.
+    "pytesseract",
     # Reached only through pdf2zh.high_level; naming them keeps the compiled
     # extension and its vendored qpdf in the bundle even if that trail changes.
     "pikepdf",

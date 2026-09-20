@@ -317,10 +317,6 @@ class App(ctk.CTk, TkinterDnD.DnDWrapper):
         self.dnd_bind("<<DropEnter>>", self._on_drag_enter)
         self.dnd_bind("<<DropLeave>>", self._on_drag_leave)
         self.after(100, self._drain_events)
-        # Both background threads are staggered: each one holds the GIL long
-        # enough while importing to make the freshly opened window hitch, and
-        # neither is urgent enough to do that to the first second of the app.
-        self.after(2000, lambda: threading.Thread(target=self._check_for_update, daemon=True).start())
         # Build the inference session while the user is still picking files: it is
         # ~0.9s that every first translation used to pay right after the button
         # press, with nothing to show. Delayed, because starting it inside
