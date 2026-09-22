@@ -98,11 +98,7 @@ $required = @(
     "_internal\tkinterdnd2",
     "_internal\cv2",
     "_internal\onnxruntime",
-    "_internal\pymupdf",
-    # OCR mode (pdf2zh/ocr.py) needs the pytesseract wrapper bundled to even
-    # attempt recognizing text; this is separate from the tesseract.exe check
-    # below, which is the native engine pytesseract calls out to.
-    "_internal\pytesseract"
+    "_internal\pymupdf"
 )
 if (-not $SkipAssets -or (Test-Path (Join-Path $root "app\assets\doclayout.onnx"))) {
     $required += "_internal\app\assets\doclayout.onnx"
@@ -113,6 +109,20 @@ if (Test-Path $tesseractExe) {
     $required += "_internal\tesseract\tessdata\eng.traineddata"
 }
 $missing = $required | Where-Object { -not (Test-Path (Join-Path $output $_)) }
+
+# pytesseract is a simple pure-Python package with no data files of its own,
+# so PyInstaller freezes it straight into the PYZ archive embedded inside
+# the exe -- the same reason pdf2zh's own modules aren't in the list above
+# as folders either. A Test-Path check for _internal\pytesseract would
+# therefore report it missing even on a build where it bundled correctly,
+# so this greps the exe's bytes for the module name instead, the same way
+# it was confirmed present by hand while diagnosing the original bug.
+$exePath = Join-Path $output "PDFTranslate.exe"
+& findstr /M /C:"pytesseract" $exePath | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    $missing += "pytesseract (not found inside PDFTranslate.exe -- see app.spec hiddenimports)"
+}
+
 if ($missing) {
     throw "Incomplete build, refusing to package. Missing:`n  " + ($missing -join "`n  ")
 }
